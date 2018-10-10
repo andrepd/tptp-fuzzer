@@ -1,0 +1,7 @@
+S src
+S src/basic_types
+
+B _build
+B _build/basic_types
+
+PKG batteries
