@@ -1,7 +1,5 @@
-S src
-S src/basic_types
+S src/
 
-B _build
-B _build/basic_types
+B _build/src/**
 
-PKG batteries
+PKG batteries angstrom

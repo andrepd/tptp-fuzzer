@@ -1,1 +1,2 @@
-ocamlbuild -use-ocamlfind -Is "src,src/myProver/,src/myProver/basic_types/" main.native
+ocamlbuild -use-ocamlfind main.native
+mv main.native tptp-fuzzer

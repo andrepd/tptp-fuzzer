@@ -1,9 +1,4 @@
-type 'a range = {
-  lower: 'a;
-  upper: 'a;
-}
-
-let (--) lower upper = {lower; upper}
+open Range
 
 type t = {
   num_clauses: int range;
