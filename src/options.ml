@@ -18,4 +18,6 @@ type t = {
   preds_arity: int range;
   
   max_depth: int;
+
+  seed: int option;
 }

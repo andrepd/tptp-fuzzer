@@ -10,9 +10,9 @@ Building
 
 Dependencies: batteries, ocamlbuild (install with opam)
 
-Run `./build.sh`
+Run `make`
 
 Help
 ----
 
-For documentation, see the code (`options.ml`).
+Use the `-h` or `--help` flag on the main binary or its subcommands.
