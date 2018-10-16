@@ -123,7 +123,7 @@ let test() =
   Random.init (Unix.gettimeofday() |> Int.of_float);
 
   let options = {
-    num_clauses = 5--8;
+    num_clauses = (* 5--8; *) 20--20;
     num_literals_per_clause = 1--4;
 
     num_vars = 3--3;
@@ -150,6 +150,35 @@ let test() =
   if not (List.for_all (Clauseset.validate_tptp String.print) gen) then
     failwith "invalid tptp"; *)
 
+  let gen = generate_clauseset_incremental options in
+
+  let iprover = External.iprover "../iprover/iproveropt" in
+  let vampire = External.vampire "../vampire/vampire4.2.2_noz3" in
+
+  Printf.printf "%15s %15s\n" ("iProver 2.8") ("Vampire 4.2.2");
+  gen |> Enum.iter (fun clauseset ->
+    let foo = IO.output_string() in
+    let problem = Clauseset.print_tptp String.print foo clauseset; IO.close_out foo in
+    let res_iprover = iprover problem |> External.result_of_string in
+    let res_vampire = vampire problem |> External.result_of_string in
+    Printf.printf "%15s %15s\n" res_iprover res_vampire
+  );
+
+  let last = generate_clauseset options in
+  (* Clauseset.print_tptp String.print stdout last; *)
+
+  (* let test: string clauseset = [
+    [{sign=true;  atom=Pred("p",[])}]; 
+    [{sign=false; atom=Pred("p",[])}]; 
+  ]
+  in
+  Clauseset.print_tptp String.print stdout test;
+  let foo = IO.output_string() in
+  let problem = Clauseset.print_tptp String.print foo last; IO.close_out foo in
+  let res_iprover = iprover problem |> External.result_of_string in
+  let res_vampire = vampire problem |> External.result_of_string in
+  Printf.printf "%15s %15s\n" res_iprover res_vampire; *)
+
   ()
 
 let seed (options: Options.t) =
@@ -172,10 +201,12 @@ let main() =
       ~first:"" ~last:"\n" ~sep:"\n\n---\n\n"
       (Clauseset.print_tptp String.print) stdout gen
   )
+
+  (* | CmdLine. *)
   
   | CmdLine.None -> failwith "no subcommand"
   end;
 
   ()
 
-let () = main()
+let () = test()

@@ -1,4 +1,4 @@
-./tptp-fuzzer incremental \
+./tptp-fuzzer print \
 	--num-clauses 5--8 \
 	--num-literals-per-clause 1--4 \
 	--num-vars 3 \
