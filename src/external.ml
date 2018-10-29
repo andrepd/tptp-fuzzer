@@ -5,7 +5,7 @@ type result =
   | Unsat
   | Unknown
 
-let result_of_string = function
+let result_to_string = function
   | Sat -> "Sat"
   | Unsat -> "Unsat"
   | Unknown -> "Unknown"
@@ -16,6 +16,8 @@ let search regex str =
     true
   with Not_found ->
     false
+
+type solver = string -> result
 
 let iprover path =
   let command = Printf.sprintf "%s --stdin=true" path in

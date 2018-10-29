@@ -1,3 +1,5 @@
+let version_number = "0.0.2"
+
 open Batteries
 
 open Range
@@ -5,61 +7,66 @@ open Range
 type result =
   | Print of Options.t
   | Incremental of Options.t
+  | Compare of Options.t * (string * External.solver) list
+  | CompareIncremental of Options.t * (string * External.solver) list
   | None
 
 (* Helper functions *)
+exception Bad_range
 let parse_range (r: string) : int range =
   (* prerr_endline r; *)
   try
     Scanf.sscanf r "%d--%d" (--)
-  with (* Scanf.Scan_failure _ | *) End_of_file ->
+  with (* Scanf.Scan_failure _ | *) End_of_file -> try
     Scanf.sscanf r "%d" (fun x -> x--x)
+  with (* Scanf.Scan_failure _ | *) End_of_file ->
+    raise Bad_range
 
-(* Fatal error: exception Ctype.Unify(_)  (wtf??) *)
-(* let range_option() : int range BatOptParse.Opt.t = 
-  let open BatOptParse.StdOpt in
-  let (x: string BatOptParse.Opt.t) = str_option() ~metavar:"<range>" in
-  let (old_get: unit -> string option) = x.option_get in
-  let (new_get: unit -> int range option) = fun () -> Option.map parse_range (old_get()) in
-  {x with option_get=new_get} *)
+let range_option() : int range BatOptParse.Opt.t = 
+  BatOptParse.Opt.value_option
+    "<range>" (* metavar *)
+    None (* default *)
+    parse_range (* coerce *)
+    (fun _ s -> Printf.sprintf "invalid range value '%s' (must be: <int>[--<int>])" s) (* errfmt *)
 
 let int_option() =
   let open BatOptParse.StdOpt in
-  int_option() ~metavar:"<number>"
+  int_option() ~metavar:"<int>"
 
 let float_option() =
   let open BatOptParse.StdOpt in
-  float_option() ~metavar:"<number>"
+  float_option() ~metavar:"<float>"
 
 let formatter = 
-  let terminal_width =
+  let terminal_width = 
     try
-      int_of_string (Sys.getenv "COLUMNS")    (* Might as well use it if it's there... *)
+      Int.of_string (Sys.getenv "COLUMNS")
     with
     | Failure _ | Not_found -> 80
   in
   BatOptParse.Formatter.indented_formatter ~max_help_position:(terminal_width/2) ()
 
+(* ----- *)
 
-
-let print_parser() ~subcommand : Options.t = 
+type options_parser_ret = {options: Options.t; args: string list; parser: BatOptParse.OptParser.t}
+let options_parser() ~subcommand = 
   let open BatOptParse in
   let open BatOptParse.OptParser in
 
-  let num_clauses             = StdOpt.str_option() ~metavar:"<range>" in
-  let num_literals_per_clause = StdOpt.str_option() ~metavar:"<range>" in
-  let num_vars                = StdOpt.str_option() ~metavar:"<range>" in
+  let num_clauses             = range_option() in
+  let num_literals_per_clause = range_option() in
+  let num_vars                = range_option() in
   let ratio_vars              = float_option() in
-  let num_funcs               = StdOpt.str_option() ~metavar:"<range>" in
-  let funcs_arity             = StdOpt.str_option() ~metavar:"<range>" in
-  let num_preds               = StdOpt.str_option() ~metavar:"<range>" in
-  let preds_arity             = StdOpt.str_option() ~metavar:"<range>" in
+  let num_funcs               = range_option() in
+  let funcs_arity             = range_option() in
+  let num_preds               = range_option() in
+  let preds_arity             = range_option() in
   let max_depth               = int_option() in
   let seed                    = StdOpt.int_option() ~metavar:"<int>" in
 
   let parser = make
     ~usage:("%prog "^subcommand^" [options...]")
-    ~version:"0.1"
+    ~version:version_number
     ~formatter
     ()
   in
@@ -75,38 +82,82 @@ let print_parser() ~subcommand : Options.t =
   add parser max_depth               ~long_name:"max-depth"               ~help:"Maximum term depth";
   add parser seed                    ~long_name:"seed"                    ~help:"Random seed (optional)";
 
-  let lst = parse_argv parser in
+  (* let lst = parse_argv parser in *)
+  (* prerr_string "Args: "; Array.print String.print stderr Sys.argv; prerr_newline(); *)
+  let foooo = Array.tail Sys.argv 2 in
+  (* prerr_string "Args: "; Array.print String.print stderr foooo; prerr_newline(); *)
+  let lst = parse parser (foooo) in
+  (* prerr_string "Options lst: "; List.print String.print stderr lst; prerr_newline(); *)
 
   try
     {
-      num_clauses             = Opt.get num_clauses |> parse_range;
-      num_literals_per_clause = Opt.get num_literals_per_clause |> parse_range;
-      num_vars                = Opt.get num_vars |> parse_range;
-      ratio_vars              = Opt.get ratio_vars;
-      num_funcs               = Opt.get num_funcs |> parse_range;
-      funcs_arity             = Opt.get funcs_arity |> parse_range;
-      num_preds               = Opt.get num_preds |> parse_range;
-      preds_arity             = Opt.get preds_arity |> parse_range;
-      max_depth               = Opt.get max_depth;
-      seed                    = Opt.opt seed;
+      options = {
+        num_clauses             = Opt.get num_clauses;
+        num_literals_per_clause = Opt.get num_literals_per_clause;
+        num_vars                = Opt.get num_vars;
+        ratio_vars              = Opt.get ratio_vars;
+        num_funcs               = Opt.get num_funcs;
+        funcs_arity             = Opt.get funcs_arity;
+        num_preds               = Opt.get num_preds;
+        preds_arity             = Opt.get preds_arity;
+        max_depth               = Opt.get max_depth;
+        seed                    = Opt.opt seed;
+      };
+      args = lst;
+      parser = parser;
     }
-  with BatOptParse.Opt.No_value -> (
-    error parser ~status:1 "Missing some mandatory argument(s). See -h for help.";
+  with 
+  |Opt.No_value ->
+    error parser ~status:1 "missing some mandatory argument(s); see -h for help";
     exit 1  (* Useless line, but above line returns unit instead of 'a so... *)
-  )
+
+let solvers_parser params ~parser : (string * External.solver) list =
+  let open BatOptParse.OptParser in
+
+  let parse_solver s =
+    let name, path = 
+      try String.split s ~by:":" 
+      with Not_found -> error parser ~status:1 "solver specification should be <solver>:<path>"; exit 1;
+    in
+    let solver = 
+      match String.lowercase @@ String.trim name with
+      | "iprover" -> External.iprover path
+      | "vampire" | "vprover" -> External.vampire path
+      | x -> error parser ~status:1 (Printf.sprintf "unrecognized solver '%s'" x); exit 1;
+    in
+    let short_path = 
+      try snd @@ String.rsplit path ~by:"/" 
+      with Not_found -> path
+    in
+    (short_path, solver)
+  in
+  List.map parse_solver params
+
+(* ----- *)
+
+let print_parser ~subcommand () = 
+  let {options} = options_parser() ~subcommand in
+  options
+
+let compare_parser ~subcommand () : Options.t * (string * External.solver) list = 
+  let {options; args=params; parser} = options_parser() ~subcommand in
+  let solvers = solvers_parser params ~parser in
+  (options, solvers)
 
 let top_parser() : result = 
   let open BatOptParse in
 
   let parser = OptParser.make
     ~usage:(
-      "%prog subcommand [options...]\n\n" ^
-      "Commands:\n" ^
-      "  print        Print a clauseset\n" ^
-      "  incremental  Print a clauseset incrementally"
+      "%prog subcommand [options...]\n\n"
+    ^ "Commands:\n"
+    ^ "  print        Print a clauseset\n"
+    ^ "  incremental  Print a clauseset incrementally\n"
+    ^ "  compare      Compare the answer of several programs\n"
+    ^ "  compare-incr As compare, but incrementally"
     )
-    ~version:"0.1"
-    ~formatter
+    ~version:version_number
+    (* ~formatter *)
     ()
   in
 
@@ -115,12 +166,21 @@ let top_parser() : result =
     exit 1
   ) else (
     let lst = OptParser.parse parser (Array.sub Sys.argv 1 1) in
+    (* prerr_string "Top lst: "; List.print String.print stderr lst; prerr_newline(); *)
     let subcommand = List.hd lst in
     match subcommand with
     | "print" -> 
       Print (print_parser() ~subcommand)
     | "incremental" -> 
       Incremental (print_parser() ~subcommand)
+    | "compare" -> (
+        let res = compare_parser() ~subcommand in
+        Compare (fst res, snd res)
+      )
+    | "compare-incremental" -> (
+        let res = compare_parser() ~subcommand in
+        CompareIncremental (fst res, snd res)
+      )
     | _ -> (
       OptParser.error parser (subcommand^" is not a subcommand."); exit 1
     )

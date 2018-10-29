@@ -117,6 +117,35 @@ let generate_clauseset_incremental (options: Options.t) : string clauseset Enum.
 
 
 
+let compare_incremental (options: Options.t) (solvers: (string * External.solver) list) = 
+  let gen = generate_clauseset_incremental options in
+
+  List.iter (Printf.printf "     %20s " % fst) solvers;
+  print_newline();
+
+  gen |> Enum.iteri (fun i clauseset ->
+    let foo = IO.output_string() in
+    let problem = Clauseset.print_tptp String.print foo clauseset; IO.close_out foo in
+    (* print_endline problem; *)
+
+    Printf.printf "%4d " (i+1);
+    solvers |> List.iter (fun (_, solver) ->
+      let res = solver problem |> External.result_to_string in
+      Printf.printf "%20s " res
+    );
+    print_newline()
+  )
+
+let compare (options: Options.t) (solvers: (string * External.solver) list) = 
+  let gen = generate_clauseset options in
+  let foo = IO.output_string() in
+  let problem = Clauseset.print_tptp String.print foo gen; IO.close_out foo in
+
+  solvers |> List.iter (fun (name, solver) ->
+    let res = solver problem |> External.result_to_string in
+    Printf.printf "%20s: %s\n" name res
+  )
+
 let test() =
   let open Options in
 
@@ -159,8 +188,9 @@ let test() =
   gen |> Enum.iter (fun clauseset ->
     let foo = IO.output_string() in
     let problem = Clauseset.print_tptp String.print foo clauseset; IO.close_out foo in
-    let res_iprover = iprover problem |> External.result_of_string in
-    let res_vampire = vampire problem |> External.result_of_string in
+    (* print_endline problem; *)
+    let res_iprover = iprover problem |> External.result_to_string in
+    let res_vampire = vampire problem |> External.result_to_string in
     Printf.printf "%15s %15s\n" res_iprover res_vampire
   );
 
@@ -175,8 +205,8 @@ let test() =
   Clauseset.print_tptp String.print stdout test;
   let foo = IO.output_string() in
   let problem = Clauseset.print_tptp String.print foo last; IO.close_out foo in
-  let res_iprover = iprover problem |> External.result_of_string in
-  let res_vampire = vampire problem |> External.result_of_string in
+  let res_iprover = iprover problem |> External.result_to_string in
+  let res_vampire = vampire problem |> External.result_to_string in
   Printf.printf "%15s %15s\n" res_iprover res_vampire; *)
 
   ()
@@ -202,6 +232,16 @@ let main() =
       (Clauseset.print_tptp String.print) stdout gen
   )
 
+  | CmdLine.CompareIncremental (options, solvers) -> (
+    Random.init (seed options);
+    compare_incremental options solvers
+  )
+
+  | CmdLine.Compare (options, solvers) -> (
+    Random.init (seed options);
+    compare options solvers
+  )
+
   (* | CmdLine. *)
   
   | CmdLine.None -> failwith "no subcommand"
@@ -209,4 +249,4 @@ let main() =
 
   ()
 
-let () = test()
+let () = main()

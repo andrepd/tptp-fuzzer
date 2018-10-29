@@ -1,5 +1,9 @@
 S src/
+S myProver/src/
+S myProver/src/basic_types
 
-B _build/src/**
+B _build/src/
+B _build/myProver/src/
+B _build/myProver/src/basic_types/
 
-PKG batteries angstrom
+PKG batteries
