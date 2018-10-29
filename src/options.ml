@@ -1,6 +1,8 @@
 open Range
 
 type t = {
+  incremental: bool;
+
   num_clauses: int range;
   num_literals_per_clause: int range;
 

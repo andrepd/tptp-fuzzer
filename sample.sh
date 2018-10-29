@@ -1,6 +1,7 @@
-./tptp-fuzzer compare-incremental \
-	"iprover:/home/andrepd/Development/iprover/iproveropt" \
+./tptp-fuzzer compare -i \
+	"iprover:/home/andrepd/Development/iprover/iproverprof" \
 	"vprover:../vampire/vampire4.2.2_noz3" \
+	\
 	--num-clauses 100 \
 	--num-literals-per-clause 1--4 \
 	--num-vars 3 \
@@ -10,6 +11,3 @@
 	--num-preds 3 \
 	--preds-arity 1--3 \
 	--max-depth 3 \
-	# --putas \
-	# --conas \
-	

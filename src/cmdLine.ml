@@ -6,10 +6,7 @@ open Range
 
 type result =
   | Print of Options.t
-  | Incremental of Options.t
   | Compare of Options.t * (string * External.solver) list
-  | CompareIncremental of Options.t * (string * External.solver) list
-  | None
 
 (* Helper functions *)
 exception Bad_range
@@ -63,6 +60,7 @@ let options_parser() ~subcommand =
   let preds_arity             = range_option() in
   let max_depth               = int_option() in
   let seed                    = StdOpt.int_option() ~metavar:"<int>" in
+  let incremental             = StdOpt.store_true() in
 
   let parser = make
     ~usage:("%prog "^subcommand^" [options...]")
@@ -71,6 +69,7 @@ let options_parser() ~subcommand =
     ()
   in
 
+  add parser incremental             ~long_name:"incremental" ~short_name:'i' ~help:"Incremental mode";
   add parser num_clauses             ~long_name:"num-clauses"             ~help:"Number of clauses";
   add parser num_literals_per_clause ~long_name:"num-literals-per-clause" ~help:"Number of literals per clause";
   add parser num_vars                ~long_name:"num-vars"                ~help:"Number of total variables";
@@ -92,6 +91,7 @@ let options_parser() ~subcommand =
   try
     {
       options = {
+        incremental             = Opt.get incremental;
         num_clauses             = Opt.get num_clauses;
         num_literals_per_clause = Opt.get num_literals_per_clause;
         num_vars                = Opt.get num_vars;
@@ -151,10 +151,8 @@ let top_parser() : result =
     ~usage:(
       "%prog subcommand [options...]\n\n"
     ^ "Commands:\n"
-    ^ "  print        Print a clauseset\n"
-    ^ "  incremental  Print a clauseset incrementally\n"
-    ^ "  compare      Compare the answer of several programs\n"
-    ^ "  compare-incr As compare, but incrementally"
+    ^ "  print         Print a clauseset\n"
+    ^ "  compare       Compare the answer of several programs\n"
     )
     ~version:version_number
     (* ~formatter *)
@@ -171,17 +169,9 @@ let top_parser() : result =
     match subcommand with
     | "print" -> 
       Print (print_parser() ~subcommand)
-    | "incremental" -> 
-      Incremental (print_parser() ~subcommand)
-    | "compare" -> (
-        let res = compare_parser() ~subcommand in
-        Compare (fst res, snd res)
-      )
-    | "compare-incremental" -> (
-        let res = compare_parser() ~subcommand in
-        CompareIncremental (fst res, snd res)
-      )
-    | _ -> (
+    | "compare" -> 
+      let res = compare_parser() ~subcommand in
+      Compare (fst res, snd res)
+    | _ -> 
       OptParser.error parser (subcommand^" is not a subcommand."); exit 1
-    )
   )

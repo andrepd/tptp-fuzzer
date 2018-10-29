@@ -152,6 +152,8 @@ let test() =
   Random.init (Unix.gettimeofday() |> Int.of_float);
 
   let options = {
+    incremental = true;
+
     num_clauses = (* 5--8; *) 20--20;
     num_literals_per_clause = 1--4;
 
@@ -212,39 +214,34 @@ let test() =
   ()
 
 let seed (options: Options.t) =
-  Option.(options.seed |? (Unix.gettimeofday() |> Int.of_float))
+  let default_seed() = Unix.gettimeofday() |> Int.of_float in
+  Option.(options.seed |? default_seed())
 
 let main() =
   Random.init (Unix.gettimeofday() |> Int.of_float);
 
   begin match CmdLine.top_parser() with 
-  | CmdLine.Print options -> (
-    Random.init (seed options);
-    let gen = generate_clauseset options in
-    Clauseset.print_tptp String.print stdout gen
-  )
-  
-  | CmdLine.Incremental options -> (
-    Random.init (seed options);
-    let gen = generate_clauseset_incremental options in
-    Enum.print 
-      ~first:"" ~last:"\n" ~sep:"\n\n---\n\n"
-      (Clauseset.print_tptp String.print) stdout gen
-  )
+  |CmdLine.Print options -> 
+    if not options.incremental then (
+      Random.init (seed options);
+      let gen = generate_clauseset options in
+      Clauseset.print_tptp String.print stdout gen
+    ) else (
+      Random.init (seed options);
+      let gen = generate_clauseset_incremental options in
+      Enum.print 
+        (Clauseset.print_tptp String.print) stdout gen
+        ~first:"" ~last:"\n" ~sep:"\n\n%-----\n\n"
+    )
 
-  | CmdLine.CompareIncremental (options, solvers) -> (
-    Random.init (seed options);
-    compare_incremental options solvers
-  )
-
-  | CmdLine.Compare (options, solvers) -> (
-    Random.init (seed options);
-    compare options solvers
-  )
-
-  (* | CmdLine. *)
-  
-  | CmdLine.None -> failwith "no subcommand"
+  |CmdLine.Compare (options, solvers) ->
+    if not options.incremental then (
+      Random.init (seed options);
+      compare options solvers
+    ) else (
+      Random.init (seed options);
+      compare_incremental options solvers
+    )
   end;
 
   ()
