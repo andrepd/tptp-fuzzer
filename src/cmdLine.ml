@@ -2,24 +2,25 @@ let version_number = "0.0.2"
 
 open Batteries
 
-open Range
+(* open Range *)
 
 type result =
   | Print of Options.t
   | Compare of Options.t * (string * External.solver) list
+  | Hammer of Options.t * (string * External.solver) list
 
 (* Helper functions *)
 exception Bad_range
-let parse_range (r: string) : int range =
+let parse_range (r: string) : int Range.t =
   (* prerr_endline r; *)
   try
-    Scanf.sscanf r "%d--%d" (--)
+    Scanf.sscanf r "%d--%d" Range.(--)
   with (* Scanf.Scan_failure _ | *) End_of_file -> try
-    Scanf.sscanf r "%d" (fun x -> x--x)
+    Scanf.sscanf r "%d" Range.point
   with (* Scanf.Scan_failure _ | *) End_of_file ->
     raise Bad_range
 
-let range_option() : int range BatOptParse.Opt.t = 
+let range_option() : int Range.t BatOptParse.Opt.t = 
   BatOptParse.Opt.value_option
     "<range>" (* metavar *)
     None (* default *)
@@ -43,10 +44,14 @@ let formatter =
   in
   BatOptParse.Formatter.indented_formatter ~max_help_position:(terminal_width/2) ()
 
+let show_error ?(status=1) parser msg = 
+  BatOptParse.OptParser.error parser ~status msg; 
+  exit status;  (* Useless line, but above line returns unit instead of 'a so... *)
+
 (* ----- *)
 
 type options_parser_ret = {options: Options.t; args: string list; parser: BatOptParse.OptParser.t}
-let options_parser() ~subcommand = 
+let options_parser() ~(usage_msg: string) = 
   let open BatOptParse in
   let open BatOptParse.OptParser in
 
@@ -63,23 +68,25 @@ let options_parser() ~subcommand =
   let incremental             = StdOpt.store_true() in
 
   let parser = make
-    ~usage:("%prog "^subcommand^" [options...]")
+    ~usage:usage_msg
     ~version:version_number
     ~formatter
     ()
   in
+  let mandatory = add_group parser "Mandatory options" in
 
-  add parser incremental             ~long_name:"incremental" ~short_name:'i' ~help:"Incremental mode";
-  add parser num_clauses             ~long_name:"num-clauses"             ~help:"Number of clauses";
-  add parser num_literals_per_clause ~long_name:"num-literals-per-clause" ~help:"Number of literals per clause";
-  add parser num_vars                ~long_name:"num-vars"                ~help:"Number of total variables";
-  add parser ratio_vars              ~long_name:"ratio-vars"              ~help:"Ratio of variables to all terms";
-  add parser num_funcs               ~long_name:"num-funcs"               ~help:"Number of functions";
-  add parser funcs_arity             ~long_name:"funcs-arity"             ~help:"Function arity";
-  add parser num_preds               ~long_name:"num-preds"               ~help:"Number of predicates";
-  add parser preds_arity             ~long_name:"preds-arity"             ~help:"Predicate arity";
-  add parser max_depth               ~long_name:"max-depth"               ~help:"Maximum term depth";
-  add parser seed                    ~long_name:"seed"                    ~help:"Random seed (optional)";
+  add parser incremental ~long_name:"incremental" ~short_name:'i' ~help:"Incremental mode";
+  add parser seed        ~long_name:"seed" ~short_name:'s'        ~help:"Random seed (optional)";
+  
+  add parser ~group:mandatory num_clauses             ~long_name:"num-clauses"             ~help:"Number of clauses";
+  add parser ~group:mandatory num_literals_per_clause ~long_name:"num-literals-per-clause" ~help:"Number of literals per clause";
+  add parser ~group:mandatory num_vars                ~long_name:"num-vars"                ~help:"Number of total variables";
+  add parser ~group:mandatory ratio_vars              ~long_name:"ratio-vars"              ~help:"Ratio of variables to all terms";
+  add parser ~group:mandatory num_funcs               ~long_name:"num-funcs"               ~help:"Number of functions";
+  add parser ~group:mandatory funcs_arity             ~long_name:"funcs-arity"             ~help:"Function arity";
+  add parser ~group:mandatory num_preds               ~long_name:"num-preds"               ~help:"Number of predicates";
+  add parser ~group:mandatory preds_arity             ~long_name:"preds-arity"             ~help:"Predicate arity";
+  add parser ~group:mandatory max_depth               ~long_name:"max-depth"               ~help:"Maximum term depth";
 
   (* let lst = parse_argv parser in *)
   (* prerr_string "Args: "; Array.print String.print stderr Sys.argv; prerr_newline(); *)
@@ -108,8 +115,7 @@ let options_parser() ~subcommand =
     }
   with 
   |Opt.No_value ->
-    error parser ~status:1 "missing some mandatory argument(s); see -h for help";
-    exit 1  (* Useless line, but above line returns unit instead of 'a so... *)
+    show_error parser "missing some mandatory argument(s); see -h for help"
 
 let solvers_parser params ~parser : (string * External.solver) list =
   let open BatOptParse.OptParser in
@@ -117,13 +123,13 @@ let solvers_parser params ~parser : (string * External.solver) list =
   let parse_solver s =
     let name, path = 
       try String.split s ~by:":" 
-      with Not_found -> error parser ~status:1 "solver specification should be <solver>:<path>"; exit 1;
+      with Not_found -> show_error parser "solver specification should be <solver>:<path>"
     in
     let solver = 
       match String.lowercase @@ String.trim name with
       | "iprover" -> External.iprover path
       | "vampire" | "vprover" -> External.vampire path
-      | x -> error parser ~status:1 (Printf.sprintf "unrecognized solver '%s'" x); exit 1;
+      | x -> show_error parser (Printf.sprintf "unrecognized solver '%s'" x)
     in
     let short_path = 
       try snd @@ String.rsplit path ~by:"/" 
@@ -131,16 +137,21 @@ let solvers_parser params ~parser : (string * External.solver) list =
     in
     (short_path, solver)
   in
-  List.map parse_solver params
+
+  match params with
+  | [] ->
+    show_error parser ("no solvers supplied")
+  | params ->
+    List.map parse_solver params
 
 (* ----- *)
 
-let print_parser ~subcommand () = 
-  let {options} = options_parser() ~subcommand in
+let print_parser ~usage_msg () = 
+  let {options} = options_parser() ~usage_msg in
   options
 
-let compare_parser ~subcommand () : Options.t * (string * External.solver) list = 
-  let {options; args=params; parser} = options_parser() ~subcommand in
+let compare_parser ~usage_msg () : Options.t * (string * External.solver) list = 
+  let {options; args=params; parser} = options_parser() ~usage_msg in
   let solvers = solvers_parser params ~parser in
   (options, solvers)
 
@@ -149,10 +160,11 @@ let top_parser() : result =
 
   let parser = OptParser.make
     ~usage:(
-      "%prog subcommand [options...]\n\n"
+      "%prog <subcommand> [<options>]\n\n"
     ^ "Commands:\n"
     ^ "  print         Print a clauseset\n"
     ^ "  compare       Compare the answer of several programs\n"
+    ^ "  hammer        As compare, but runs indefinitely and only reports discrepancies"
     )
     ~version:version_number
     (* ~formatter *)
@@ -168,10 +180,16 @@ let top_parser() : result =
     let subcommand = List.hd lst in
     match subcommand with
     | "print" -> 
-      Print (print_parser() ~subcommand)
+      let usage_msg: string = "%prog print <options>" in
+      Print (print_parser() ~usage_msg)
     | "compare" -> 
-      let res = compare_parser() ~subcommand in
+      let usage_msg: string = "%prog compare <options> <solvers>..." in
+      let res = compare_parser() ~usage_msg in
       Compare (fst res, snd res)
+    | "hammer" -> 
+      let usage_msg: string = "%prog hammer <options> <solvers>..." in
+      let res = compare_parser() ~usage_msg in
+      Hammer (fst res, snd res)
     | _ -> 
-      OptParser.error parser (subcommand^" is not a subcommand."); exit 1
+      show_error parser (Printf.sprintf "%s is not a subcommand." subcommand)
   )
