@@ -8,6 +8,7 @@ type result =
   | Print of Options.t
   | Compare of Options.t * (string * External.solver) list
   | Hammer of Options.t * (string * External.solver) list
+  | Save of Options.t * int * string
 
 (* Helper functions *)
 exception Bad_range
@@ -155,6 +156,15 @@ let compare_parser ~usage_msg () : Options.t * (string * External.solver) list =
   let solvers = solvers_parser params ~parser in
   (options, solvers)
 
+let save_parser ~usage_msg () =
+  let open BatOptParse.OptParser in
+  let {options; args; parser} = options_parser() ~usage_msg in
+  match args with
+  | [n; dir] ->
+    let n = Int.of_string n in
+    (options, n, dir)
+  | _ -> usage parser (); exit 1
+
 let top_parser() : result = 
   let open BatOptParse in
 
@@ -164,7 +174,8 @@ let top_parser() : result =
     ^ "Commands:\n"
     ^ "  print         Print a clauseset\n"
     ^ "  compare       Compare the answer of several programs\n"
-    ^ "  hammer        As compare, but runs indefinitely and only reports discrepancies"
+    ^ "  hammer        As compare, but runs indefinitely and only reports discrepancies\n"
+    ^ "  save          Saves a test set in a directory"
     )
     ~version:version_number
     (* ~formatter *)
@@ -190,6 +201,10 @@ let top_parser() : result =
       let usage_msg: string = "%prog hammer <options> <solvers>..." in
       let res = compare_parser() ~usage_msg in
       Hammer (fst res, snd res)
+    | "save" -> 
+      let usage_msg: string = "%prog save <options> <number_of_formulas> <dir>" in
+      let a,b,c = save_parser() ~usage_msg in
+      Save (a,b,c)
     | _ -> 
       show_error parser (Printf.sprintf "%s is not a subcommand." subcommand)
   )

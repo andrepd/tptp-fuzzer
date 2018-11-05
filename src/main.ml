@@ -36,12 +36,12 @@ let compare_incremental (options: Options.t) (solvers: (string * External.solver
     let problem = Clauseset.to_string_tptp identity clauseset in
     (* print_endline problem; *)
 
-    Printf.printf "%4d " (i+1);
+    Printf.printf "%4d " (i+1); IO.flush stdout;
     solvers |> List.iter (fun (_, solver) ->
       let res = solver problem |> External.result_to_string in
-      Printf.printf "%20s " res
+      Printf.printf "%20s " res; IO.flush stdout;
     );
-    print_newline()
+    print_newline();
   )
 
 (* ----- *)
@@ -108,71 +108,66 @@ let hammer_incremental options solvers =
     )
   )
 
+(* --- *)
 
-let test() =
-  let open Options in
+(* Modified wrapper of mkdir: only creates if doesn't exist and nonempty *)
+let mkdir dir =
+  let dir_is_empty dir =
+    let fd = Unix.opendir dir in
+    try
+      for i=0 to 2 do
+        ignore @@ Unix.readdir fd;
+      done;
+      Unix.closedir fd;
+      false
+    with
+    | End_of_file -> Unix.closedir fd; true
+  in
+  try
+    Unix.mkdir dir 0o775
+  with
+  | Unix.Unix_error (Unix.EEXIST, _, _) -> 
+    if dir_is_empty dir then
+      ()
+    else
+      failwith "directory exists and is nonempty"
 
-  Random.init (Unix.gettimeofday() |> Int.of_float);
-
-  let options = {
-    incremental = true;
-
-    num_clauses = (* 5--8; *) 20--20;
-    num_literals_per_clause = 1--4;
-
-    num_vars = 3--3;
-    ratio_vars = 0.315;
-    
-    num_funcs = 3--3;
-    funcs_arity = 0--3;
-    
-    num_preds = 3--3;
-    preds_arity = 1--3;
-    
-    max_depth = 3;
-
-    seed = None;
-  }
+let save options n dir = 
+  let fname dir n = 
+    Printf.sprintf "%s/test%d.p" dir n
   in
 
-  (* let options = CmdLine.print_parser() in
+  mkdir dir;
 
-  let gen = generate_clauseset_incremental options |> List.of_enum in
+  Enum.(1 -- n) |> Enum.iter (fun i ->
+    let fname = fname dir i in
+    let file = File.open_out fname in
+    let gen = generate_clauseset options in
+    Clauseset.print_tptp String.print file gen;
+    IO.close_out file;
+  )
 
-  List.print ~first:"" ~last:"\n" ~sep:"\n\n---\n\n" (Clauseset.print_tptp String.print) stdout gen;
-  
-  if not (List.for_all (Clauseset.validate_tptp String.print) gen) then
-    failwith "invalid tptp"; *)
-
-  let gen = generate_clauseset_incremental options in
-
-  let iprover = External.iprover "../iprover/iproveropt" in
-  let vampire = External.vampire "../vampire/vampire4.2.2_noz3" in
-
-  Printf.printf "%15s %15s\n" ("iProver 2.8") ("Vampire 4.2.2");
-  gen |> Enum.iter (fun clauseset ->
-    let problem = Clauseset.to_string_tptp identity clauseset in
-    (* print_endline problem; *)
-    let res_iprover = iprover problem |> External.result_to_string in
-    let res_vampire = vampire problem |> External.result_to_string in
-    Printf.printf "%15s %15s\n" res_iprover res_vampire
-  );
-
-  let last = generate_clauseset options in
-  (* Clauseset.print_tptp String.print stdout last; *)
-
-  (* let test: string clauseset = [
-    [{sign=true;  atom=Pred("p",[])}]; 
-    [{sign=false; atom=Pred("p",[])}]; 
-  ]
+let save_incremental options n dir = 
+  let fname dir n c = 
+    Printf.sprintf "%s/test%d/%d.p" dir n c
   in
-  Clauseset.print_tptp String.print stdout test;
-  let problem = Clauseset.to_string_tptp identity last in
-  let res_iprover = iprover problem |> External.result_to_string in
-  let res_vampire = vampire problem |> External.result_to_string in
-  Printf.printf "%15s %15s\n" res_iprover res_vampire; *)
 
-  ()
+  mkdir dir;
+
+  Enum.(1 -- n) |> Enum.iter (fun i ->
+    let gen = generate_clauseset_incremental options in
+    Unix.mkdir (Printf.sprintf "%s/test%d" dir i) 0o775;
+    gen |> Enum.iteri (fun j clauseset ->
+      let fname = fname dir i j in
+      let file = File.open_out fname in
+      Clauseset.print_tptp String.print file clauseset;
+      IO.close_out file;
+    )
+  )
+
+
+
+
 
 let seed (options: Options.t) =
   let default_seed() = Unix.gettimeofday() |> Int.of_float in
@@ -202,6 +197,14 @@ let main() =
       hammer options solvers
     ) else (
       hammer_incremental options solvers
+    )
+
+  |CmdLine.Save (options, n, dir) ->
+    Random.init (seed options);
+    if not options.incremental then (
+      save options n dir;
+    ) else (
+      save_incremental options n dir;
     )
   end;
 

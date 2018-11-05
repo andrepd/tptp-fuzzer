@@ -1,9 +1,9 @@
 S src/
-S myProver/src/
-S myProver/src/basic_types
+S myProver/
+S myProver/basic_types/
 
 B _build/src/
-B _build/myProver/src/
-B _build/myProver/src/basic_types/
+B _build/myProver/
+B _build/myProver/basic_types/
 
 PKG batteries
