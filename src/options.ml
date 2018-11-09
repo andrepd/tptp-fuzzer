@@ -21,5 +21,8 @@ type t = {
   
   max_depth: int;
 
+  ratio_equality: float;
+  (* ratio_truth: float; *)
+
   seed: int option;
 }

@@ -12,6 +12,10 @@ let random_in (range: int range) =
   let n = Random.int diff in
   range.lower + n
 
+let weighted_toss true_prob =
+  let roll = Random.float 1. in
+  roll < true_prob
+
 
 
 let generate_term (options: Options.t) ~funcs ~num_vars : string term =
@@ -26,8 +30,7 @@ let generate_term (options: Options.t) ~funcs ~num_vars : string term =
       ) 
       (* Otherwise we can choose a variable or a constant *)
       else (
-        let roll = Random.float 1. in
-        if roll < options.ratio_vars then (
+        if weighted_toss options.ratio_vars then (
           let i = Random.int num_vars + 1 in
           Var ("X" ^ Int.to_string i)
         ) else (
@@ -38,8 +41,7 @@ let generate_term (options: Options.t) ~funcs ~num_vars : string term =
     )
     (* If we haven't hit the bottom we can pick anything *)
     else (
-      let roll = Random.float 1. in
-      if roll < options.ratio_vars then (
+      if weighted_toss options.ratio_vars then (
         let i = Random.int num_vars + 1 in
         Var ("X" ^ Int.to_string i)
       ) else (
@@ -51,7 +53,12 @@ let generate_term (options: Options.t) ~funcs ~num_vars : string term =
   aux options.max_depth
 
 let generate_atom (options: Options.t) ~funcs ~preds ~num_vars : string atom =
-  let name, arity = Random.choice (List.enum preds) in
+  let name, arity =
+    if weighted_toss options.ratio_equality then
+      "=", 2
+    else
+      Random.choice (List.enum preds)
+  in
   Pred (name, List.init arity (fun _ -> generate_term options ~funcs ~num_vars))
 
 let generate_literal (options: Options.t) ~funcs ~preds ~num_vars : string literal =
