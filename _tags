@@ -1,5 +1,5 @@
 true: package(batteries)
 
 "src": include
-"myProver": include
-"myProver/basic_types": include
+"myProver/src": include
+"myProver/src/basic_types": include
